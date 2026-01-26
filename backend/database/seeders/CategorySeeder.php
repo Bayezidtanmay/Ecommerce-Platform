@@ -12,13 +12,15 @@ class CategorySeeder extends Seeder
     {
         $names = [
             'Electronics',
-            'Fashion',
+            'Home Appliances',
+            'Plants & Garden',
+            'Musical Instruments',
+            'Clothing',
+            'Smart Devices',
+            'Sports & Outdoor',
             'Home & Kitchen',
-            'Sports',
-            'Beauty',
             'Books',
-            'Toys',
-            'Groceries',
+            'Beauty & Skincare',
         ];
 
         foreach ($names as $name) {

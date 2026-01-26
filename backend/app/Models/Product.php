@@ -14,6 +14,7 @@ class Product extends Model
         'slug',
         'description',
         'price',
+        'compare_at_price',
         'stock',
         'is_active',
     ];
