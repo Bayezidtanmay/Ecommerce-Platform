@@ -21,42 +21,29 @@ export default function Login() {
     };
 
     return (
-        <div style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
-            <h1 style={{ fontSize: 28, marginBottom: 12 }}>Login</h1>
+        <div className="container page">
+            <div className="surface authCard">
+                <h1 className="h1" style={{ marginBottom: 6 }}>Welcome back</h1>
+                <div className="subtle" style={{ marginBottom: 14 }}>Sign in to manage your cart.</div>
 
-            {error && (
-                <div style={{ background: "#fee2e2", padding: 10, borderRadius: 10, marginBottom: 12 }}>
-                    {error}
-                </div>
-            )}
+                {error && (
+                    <div style={{ padding: 12, borderRadius: 14, border: "1px solid rgba(255,92,122,.35)", background: "rgba(255,92,122,.12)", marginBottom: 12 }}>
+                        {error}
+                    </div>
+                )}
 
-            <form onSubmit={onSubmit} style={{ display: "grid", gap: 10 }}>
-                <input
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email"
-                    style={{ padding: 12, borderRadius: 10, border: "1px solid #e5e7eb" }}
-                />
-                <input
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Password"
-                    type="password"
-                    style={{ padding: 12, borderRadius: 10, border: "1px solid #e5e7eb" }}
-                />
-                <button
-                    style={{
-                        padding: 12,
-                        borderRadius: 10,
-                        border: 0,
-                        background: "#111827",
-                        color: "white",
-                        fontWeight: 700,
-                    }}
-                >
-                    Sign in
-                </button>
-            </form>
+                <form onSubmit={onSubmit} style={{ display: "grid", gap: 10 }}>
+                    <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
+                    <input className="input" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" />
+                    <button className="btn btnPrimary" style={{ padding: 12, borderRadius: 14, fontWeight: 900 }}>
+                        Sign in
+                    </button>
+                    <button type="button" className="btn" onClick={() => nav("/shop")}>
+                        Back to shop
+                    </button>
+                </form>
+            </div>
         </div>
     );
 }
+
