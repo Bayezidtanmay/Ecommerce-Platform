@@ -34,6 +34,10 @@ export default function Shop() {
     const [products, setProducts] = useState([]);
     const [meta, setMeta] = useState(null);
 
+    // Categories
+    const [categories, setCategories] = useState([]);
+    const [activeCategory, setActiveCategory] = useState(""); // slug or ""
+
     // Search
     const [search, setSearch] = useState("");
     const debouncedSearch = useDebouncedValue(search, 450);
@@ -46,9 +50,20 @@ export default function Shop() {
     const removeToast = (id) => setToasts((p) => p.filter((t) => t.id !== id));
 
     const hasToken = useMemo(() => !!localStorage.getItem("token"), []);
+
     const abortRef = useRef(null);
 
-    const loadProducts = async ({ searchTerm } = {}) => {
+    const loadCategories = async () => {
+        try {
+            const res = await api.get("/categories");
+            setCategories(res.data || []);
+        } catch (err) {
+            // Not fatal — shop can still work without chips
+            pushToast("Warning", "Failed to load categories.");
+        }
+    };
+
+    const loadProducts = async ({ searchTerm, categorySlug } = {}) => {
         setLoading(true);
 
         // Abort previous request (prevents race conditions)
@@ -62,6 +77,9 @@ export default function Shop() {
             const q = (searchTerm ?? "").trim();
             if (q) params.search = q;
 
+            const cat = (categorySlug ?? "").trim();
+            if (cat) params.category = cat;
+
             const res = await api.get("/products", {
                 params,
                 signal: abortRef.current.signal,
@@ -70,7 +88,6 @@ export default function Shop() {
             setProducts(res.data?.data || []);
             setMeta({ current: res.data?.current_page, last: res.data?.last_page });
         } catch (err) {
-            // Ignore abort errors
             if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") return;
             pushToast("Error", err?.response?.data?.message || "Failed to load products");
         } finally {
@@ -78,10 +95,17 @@ export default function Shop() {
         }
     };
 
+    // Initial load
     useEffect(() => {
-        loadProducts({ searchTerm: debouncedSearch });
+        loadCategories();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [debouncedSearch]);
+    }, []);
+
+    // Reload products whenever debounced search or category changes
+    useEffect(() => {
+        loadProducts({ searchTerm: debouncedSearch, categorySlug: activeCategory });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debouncedSearch, activeCategory]);
 
     const addToCart = async (productId) => {
         setAddingId(productId);
@@ -100,7 +124,11 @@ export default function Shop() {
         }
     };
 
-    const clearSearch = () => setSearch("");
+    const categoryName = useMemo(() => {
+        if (!activeCategory) return "All";
+        const c = categories.find((x) => x.slug === activeCategory);
+        return c?.name || "Category";
+    }, [activeCategory, categories]);
 
     return (
         <>
@@ -113,9 +141,7 @@ export default function Shop() {
                     </div>
 
                     <div className="navActions">
-                        <button className="btn" onClick={() => nav("/cart")}>
-                            Cart
-                        </button>
+                        <button className="btn" onClick={() => nav("/cart")}>Cart</button>
                         <button className="btn btnPrimary" onClick={() => nav("/login")}>
                             {hasToken ? "Account" : "Login"}
                         </button>
@@ -146,26 +172,82 @@ export default function Shop() {
                             </div>
                         )}
 
-                        {/* Clean Search box (no inner border on typing) */}
-                        <div className="searchWrap surface">
-                            <span className="searchIcon" aria-hidden="true">
-                                🔎
-                            </span>
-
+                        {/* Search box */}
+                        <div
+                            className="surface"
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                padding: "10px 12px",
+                                borderRadius: 14,
+                                border: "1px solid rgba(255,255,255,.10)",
+                                minWidth: 280,
+                            }}
+                        >
+                            <span style={{ opacity: 0.7, fontWeight: 800 }}>🔎</span>
                             <input
-                                className="searchInput"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search products (e.g. guitar, hoodie, vacuum)…"
-                                aria-label="Search products"
+                                style={{
+                                    border: "none",
+                                    outline: "none",
+                                    boxShadow: "none",
+                                    background: "transparent",
+                                    padding: 0,
+                                    width: "100%",
+                                    color: "inherit",
+                                }}
                             />
-
                             {search.trim().length > 0 && (
-                                <button className="searchClear" onClick={clearSearch} title="Clear" type="button">
+                                <button
+                                    className="btn"
+                                    onClick={() => setSearch("")}
+                                    style={{ padding: "8px 10px", borderRadius: 12 }}
+                                    title="Clear"
+                                    type="button"
+                                >
                                     ✕
                                 </button>
                             )}
                         </div>
+                    </div>
+                </div>
+
+                {/* Category chips */}
+                <div
+                    className="surface"
+                    style={{
+                        marginTop: 14,
+                        padding: 12,
+                        borderRadius: 16,
+                        border: "1px solid rgba(255,255,255,.10)",
+                    }}
+                >
+                    <div className="subtle" style={{ marginBottom: 10 }}>
+                        Category: <span style={{ opacity: 0.95, fontWeight: 900 }}>{categoryName}</span>
+                    </div>
+
+                    <div className="chipRow">
+                        <button
+                            type="button"
+                            className={`chip ${activeCategory === "" ? "chipActive" : ""}`}
+                            onClick={() => setActiveCategory("")}
+                        >
+                            All
+                        </button>
+
+                        {categories.map((c) => (
+                            <button
+                                key={c.id}
+                                type="button"
+                                className={`chip ${activeCategory === c.slug ? "chipActive" : ""}`}
+                                onClick={() => setActiveCategory(c.slug)}
+                            >
+                                {c.name}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
@@ -177,9 +259,11 @@ export default function Shop() {
                     <>
                         {/* Result hint */}
                         <div className="subtle" style={{ marginTop: 12 }}>
-                            {debouncedSearch.trim()
-                                ? `Showing results for “${debouncedSearch.trim()}” (${products.length})`
-                                : `Showing all products (${products.length})`}
+                            {debouncedSearch.trim() ? (
+                                <>Showing results for “{debouncedSearch.trim()}” ({products.length})</>
+                            ) : (
+                                <>Showing {activeCategory ? `“${categoryName}”` : "all products"} ({products.length})</>
+                            )}
                         </div>
 
                         <div
@@ -196,19 +280,12 @@ export default function Shop() {
 
                                 const sale = p.compare_at_price && p.compare_at_price > p.price;
                                 const pct = sale ? Math.round((1 - p.price / p.compare_at_price) * 100) : 0;
-
                                 const desc = (p.description || "").trim();
 
                                 return (
                                     <div
                                         key={p.id}
                                         className="productCard surface"
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={() => nav(`/products/${p.slug}`)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter" || e.key === " ") nav(`/products/${p.slug}`);
-                                        }}
                                         style={{
                                             borderRadius: 18,
                                             overflow: "hidden",
@@ -216,7 +293,6 @@ export default function Shop() {
                                             boxShadow: "0 10px 30px rgba(0,0,0,.25)",
                                             transform: "translateY(0)",
                                             transition: "transform .18s ease, box-shadow .18s ease, border-color .18s ease",
-                                            cursor: "pointer",
                                         }}
                                         onMouseEnter={(e) => {
                                             e.currentTarget.style.transform = "translateY(-4px)";
@@ -228,6 +304,9 @@ export default function Shop() {
                                             e.currentTarget.style.boxShadow = "0 10px 30px rgba(0,0,0,.25)";
                                             e.currentTarget.style.borderColor = "rgba(255,255,255,.10)";
                                         }}
+                                        onClick={() => nav(`/products/${p.slug}`)}
+                                        role="button"
+                                        tabIndex={0}
                                     >
                                         {/* Media */}
                                         <div style={{ position: "relative", height: 180, overflow: "hidden" }}>
@@ -258,9 +337,7 @@ export default function Shop() {
                                                     src={primary}
                                                     alt={p.name}
                                                     loading="lazy"
-                                                    onError={(e) => {
-                                                        e.currentTarget.src = "https://picsum.photos/seed/fallback-primary/800/800";
-                                                    }}
+                                                    onError={(e) => (e.currentTarget.src = "https://picsum.photos/seed/fallback-primary/800/800")}
                                                     style={{
                                                         width: "100%",
                                                         height: "100%",
@@ -275,9 +352,7 @@ export default function Shop() {
                                                     src={secondary}
                                                     alt={p.name}
                                                     loading="lazy"
-                                                    onError={(e) => {
-                                                        e.currentTarget.src = "https://picsum.photos/seed/fallback-secondary/800/800";
-                                                    }}
+                                                    onError={(e) => (e.currentTarget.src = "https://picsum.photos/seed/fallback-secondary/800/800")}
                                                     style={{
                                                         width: "100%",
                                                         height: "100%",
@@ -299,22 +374,13 @@ export default function Shop() {
                                             <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                                                 <div>
                                                     <div style={{ fontWeight: 900, fontSize: 16 }}>{p.name}</div>
-                                                    <div className="subtle" style={{ marginTop: 2 }}>
-                                                        {p.category?.name}
-                                                    </div>
+                                                    <div className="subtle" style={{ marginTop: 2 }}>{p.category?.name}</div>
                                                 </div>
 
                                                 <div style={{ textAlign: "right" }}>
                                                     <div style={{ fontWeight: 900 }}>{money(p.price)}</div>
                                                     {sale && (
-                                                        <div
-                                                            style={{
-                                                                marginTop: 2,
-                                                                fontSize: 12,
-                                                                opacity: 0.65,
-                                                                textDecoration: "line-through",
-                                                            }}
-                                                        >
+                                                        <div style={{ marginTop: 2, fontSize: 12, opacity: 0.65, textDecoration: "line-through" }}>
                                                             {money(p.compare_at_price)}
                                                         </div>
                                                     )}
@@ -322,17 +388,8 @@ export default function Shop() {
                                             </div>
 
                                             {desc && (
-                                                <div
-                                                    style={{
-                                                        marginTop: 8,
-                                                        color: "rgba(255,255,255,.72)",
-                                                        fontSize: 13,
-                                                        lineHeight: 1.35,
-                                                        minHeight: 36,
-                                                    }}
-                                                >
-                                                    {desc.slice(0, 78)}
-                                                    {desc.length > 78 ? "…" : ""}
+                                                <div style={{ marginTop: 8, color: "rgba(255,255,255,.72)", fontSize: 13, lineHeight: 1.35, minHeight: 36 }}>
+                                                    {desc.slice(0, 78)}{desc.length > 78 ? "…" : ""}
                                                 </div>
                                             )}
 
@@ -358,17 +415,17 @@ export default function Shop() {
                             })}
                         </div>
 
-                        {/* Empty state */}
                         {!products.length && (
                             <div className="surface" style={{ marginTop: 16, padding: 16 }}>
                                 No products found.
-                                {debouncedSearch.trim() ? (
-                                    <div style={{ marginTop: 10 }}>
-                                        <button className="btn" onClick={clearSearch}>
-                                            Clear search
-                                        </button>
-                                    </div>
-                                ) : null}
+                                <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                                    {debouncedSearch.trim() ? (
+                                        <button className="btn" onClick={() => setSearch("")}>Clear search</button>
+                                    ) : null}
+                                    {activeCategory ? (
+                                        <button className="btn" onClick={() => setActiveCategory("")}>Clear category</button>
+                                    ) : null}
+                                </div>
                             </div>
                         )}
                     </>
@@ -377,66 +434,47 @@ export default function Shop() {
 
             <Toast toasts={toasts} removeToast={removeToast} />
 
+            {/* Hover image swap behavior scoped to cards only + chips styling */}
             <style>{`
-        /* Hover image swap scoped to cards only */
         .productCard:hover .shopImgPrimary { opacity: 0; transform: scale(1.06); }
         .productCard:hover .shopImgSecondary { opacity: 1; transform: scale(1.06); }
 
-        /* CLEAN SEARCH */
-        .searchWrap{
-          display:flex;
-          align-items:center;
-          gap:10px;
-          padding:10px 12px;
-          border-radius:14px;
-          border:1px solid rgba(255,255,255,.10);
-          min-width:280px;
-          transition:border-color .18s ease, box-shadow .18s ease;
+        .chipRow {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
         }
-        .searchWrap:focus-within{
-          border-color: rgba(79,140,255,.35);
-          box-shadow: 0 0 0 4px rgba(79,140,255,.10);
-        }
-        .searchIcon{ opacity:.7; font-weight:800; }
-        .searchInput{
-          flex:1;
-          width:100%;
-          background:transparent;
-          border:0 !important;
-          outline:0 !important;
-          box-shadow:none !important;
-          padding:0;
-          color:inherit;
-          font:inherit;
-        }
-        .searchInput:focus{
-          outline:0 !important;
-          box-shadow:none !important;
-        }
-        /* Kill browser "search" decorations if it ever becomes type=search */
-        .searchInput::-webkit-search-decoration,
-        .searchInput::-webkit-search-cancel-button,
-        .searchInput::-webkit-search-results-button,
-        .searchInput::-webkit-search-results-decoration { display:none; }
 
-        .searchClear{
-          border:1px solid rgba(255,255,255,.10);
+        .chip {
+          appearance: none;
+          border: 1px solid rgba(255,255,255,.12);
           background: rgba(255,255,255,.06);
-          color: inherit;
-          padding: 8px 10px;
-          border-radius: 12px;
+          color: rgba(255,255,255,.92);
+          padding: 8px 12px;
+          border-radius: 999px;
+          font-weight: 800;
+          font-size: 13px;
           cursor: pointer;
-          transition: transform .12s ease, background .12s ease, border-color .12s ease;
+          transition: transform .12s ease, border-color .12s ease, background .12s ease;
+          user-select: none;
         }
-        .searchClear:hover{
+
+        .chip:hover {
           transform: translateY(-1px);
-          background: rgba(255,255,255,.10);
-          border-color: rgba(255,255,255,.16);
+          border-color: rgba(79,140,255,.35);
+          background: rgba(79,140,255,.10);
+        }
+
+        .chipActive {
+          border-color: rgba(79,140,255,.55);
+          background: rgba(79,140,255,.16);
+          box-shadow: 0 10px 25px rgba(0,0,0,.18);
         }
       `}</style>
         </>
     );
 }
+
 
 
 
