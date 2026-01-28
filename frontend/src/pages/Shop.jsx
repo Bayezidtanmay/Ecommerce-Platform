@@ -6,16 +6,20 @@ import Toast from "../components/Toast";
 const money = (cents) => `€${(cents / 100).toFixed(2)}`;
 
 function getSecondaryImage(p) {
-    // Best: API returns images array
     const fromImages =
         Array.isArray(p.images) && p.images.length
             ? p.images.find((img) => !img.is_primary)?.url || p.images[1]?.url
             : null;
 
-    // Optional: API provides secondary_image
     const fromSecondary = p.secondary_image?.url || p.secondary_image;
-
     return fromImages || fromSecondary || null;
+}
+
+function stockInfo(stock) {
+    const s = Number(stock ?? 0);
+    if (s <= 0) return { text: "Out of stock", tone: "danger" };
+    if (s <= 5) return { text: `Low stock (${s})`, tone: "warn" };
+    return { text: `In stock (${s})`, tone: "ok" };
 }
 
 export default function Shop() {
@@ -123,7 +127,10 @@ export default function Shop() {
 
                             const sale = p.compare_at_price && p.compare_at_price > p.price;
                             const pct = sale ? Math.round((1 - p.price / p.compare_at_price) * 100) : 0;
+
                             const desc = (p.description || "").trim();
+                            const s = stockInfo(p.stock);
+                            const out = (p.stock ?? 0) <= 0;
 
                             return (
                                 <div
@@ -148,8 +155,13 @@ export default function Shop() {
                                         e.currentTarget.style.borderColor = "rgba(255,255,255,.10)";
                                     }}
                                 >
-                                    {/* Media (shorter image) */}
-                                    <div style={{ position: "relative", height: 180, overflow: "hidden" }}>
+                                    {/* Media */}
+                                    <div
+                                        className="productMedia"
+                                        style={{ position: "relative", height: 170, overflow: "hidden", cursor: "pointer" }}
+                                        onClick={() => nav(`/products/${p.slug}`)}
+                                        title="View product"
+                                    >
                                         {/* Sale badge */}
                                         {sale && (
                                             <div
@@ -173,15 +185,29 @@ export default function Shop() {
                                             </div>
                                         )}
 
+                                        {/* Stock pill */}
+                                        <div
+                                            className="pill"
+                                            data-tone={s.tone}
+                                            style={{
+                                                position: "absolute",
+                                                top: 12,
+                                                right: 12,
+                                                zIndex: 2,
+                                                textTransform: "none",
+                                                backdropFilter: "blur(10px)",
+                                            }}
+                                        >
+                                            {s.text}
+                                        </div>
+
                                         {/* Image swap on hover */}
                                         <div style={{ position: "absolute", inset: 0 }}>
                                             <img
                                                 src={primary}
                                                 alt={p.name}
                                                 loading="lazy"
-                                                onError={(e) => {
-                                                    e.currentTarget.src = "https://picsum.photos/seed/fallback-primary/800/800";
-                                                }}
+                                                onError={(e) => { e.currentTarget.src = "https://picsum.photos/seed/fallback-primary/800/800"; }}
                                                 style={{
                                                     width: "100%",
                                                     height: "100%",
@@ -189,6 +215,7 @@ export default function Shop() {
                                                     display: "block",
                                                     transform: "scale(1.02)",
                                                     transition: "opacity .25s ease, transform .25s ease",
+                                                    filter: out ? "grayscale(0.25) brightness(0.9)" : "none",
                                                 }}
                                                 className="shopImgPrimary"
                                             />
@@ -196,9 +223,7 @@ export default function Shop() {
                                                 src={secondary}
                                                 alt={p.name}
                                                 loading="lazy"
-                                                onError={(e) => {
-                                                    e.currentTarget.src = "https://picsum.photos/seed/fallback-secondary/800/800";
-                                                }}
+                                                onError={(e) => { e.currentTarget.src = "https://picsum.photos/seed/fallback-secondary/800/800"; }}
                                                 style={{
                                                     width: "100%",
                                                     height: "100%",
@@ -209,17 +234,52 @@ export default function Shop() {
                                                     opacity: 0,
                                                     transform: "scale(1.02)",
                                                     transition: "opacity .25s ease, transform .25s ease",
+                                                    filter: out ? "grayscale(0.25) brightness(0.9)" : "none",
                                                 }}
                                                 className="shopImgSecondary"
                                             />
                                         </div>
+
+                                        {/* Out-of-stock overlay */}
+                                        {out && (
+                                            <div
+                                                style={{
+                                                    position: "absolute",
+                                                    inset: 0,
+                                                    display: "grid",
+                                                    placeItems: "center",
+                                                    background: "linear-gradient(to bottom, rgba(0,0,0,.05), rgba(0,0,0,.45))",
+                                                    zIndex: 3,
+                                                    pointerEvents: "none",
+                                                }}
+                                            >
+                                                <div
+                                                    style={{
+                                                        padding: "8px 12px",
+                                                        borderRadius: 999,
+                                                        fontWeight: 900,
+                                                        border: "1px solid rgba(255,255,255,.18)",
+                                                        background: "rgba(0,0,0,.35)",
+                                                        backdropFilter: "blur(10px)",
+                                                    }}
+                                                >
+                                                    Out of stock
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Body */}
                                     <div style={{ padding: 14 }}>
-                                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                                            <div>
-                                                <div style={{ fontWeight: 900, fontSize: 16 }}>{p.name}</div>
+                                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                                            <div style={{ minWidth: 0 }}>
+                                                <div
+                                                    onClick={() => nav(`/products/${p.slug}`)}
+                                                    style={{ fontWeight: 900, fontSize: 16, cursor: "pointer" }}
+                                                    title="View product"
+                                                >
+                                                    {p.name}
+                                                </div>
                                                 <div className="subtle" style={{ marginTop: 2 }}>
                                                     {p.category?.name}
                                                 </div>
@@ -243,19 +303,27 @@ export default function Shop() {
                                             </div>
                                         )}
 
-                                        <button
-                                            className="btn btnPrimary"
-                                            onClick={() => addToCart(p.id)}
-                                            disabled={addingId === p.id}
-                                            style={{
-                                                width: "100%",
-                                                marginTop: 10,
-                                                opacity: addingId === p.id ? 0.75 : 1,
-                                                cursor: addingId === p.id ? "not-allowed" : "pointer",
-                                            }}
-                                        >
-                                            {addingId === p.id ? "Adding..." : "Add to cart"}
-                                        </button>
+                                        <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+                                            <button
+                                                className="btn"
+                                                onClick={() => nav(`/products/${p.slug}`)}
+                                            >
+                                                Quick view
+                                            </button>
+
+                                            <button
+                                                className="btn btnPrimary"
+                                                onClick={() => addToCart(p.id)}
+                                                disabled={addingId === p.id || out}
+                                                style={{
+                                                    width: "100%",
+                                                    opacity: addingId === p.id ? 0.75 : out ? 0.55 : 1,
+                                                    cursor: addingId === p.id || out ? "not-allowed" : "pointer",
+                                                }}
+                                            >
+                                                {out ? "Unavailable" : addingId === p.id ? "Adding..." : "Add to cart"}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -270,10 +338,16 @@ export default function Shop() {
             <style>{`
         .productCard:hover .shopImgPrimary { opacity: 0; transform: scale(1.06); }
         .productCard:hover .shopImgSecondary { opacity: 1; transform: scale(1.06); }
+
+        /* stock tones (safe even if you already style pill) */
+        .pill[data-tone="danger"] { border-color: rgba(255,92,122,.35); }
+        .pill[data-tone="warn"] { border-color: rgba(255,200,87,.35); }
+        .pill[data-tone="ok"] { border-color: rgba(79,140,255,.35); }
       `}</style>
         </>
     );
 }
+
 
 
 
