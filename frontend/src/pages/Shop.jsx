@@ -42,6 +42,7 @@ export default function Shop() {
     const [search, setSearch] = useState("");
     const debouncedSearch = useDebouncedValue(search, 450);
 
+    // Toast
     const [toasts, setToasts] = useState([]);
     const pushToast = (title, text) => {
         const id = Date.now() + Math.random();
@@ -56,8 +57,8 @@ export default function Shop() {
     const loadCategories = async () => {
         try {
             const res = await api.get("/categories");
-            setCategories(res.data || []);
-        } catch (err) {
+            setCategories(Array.isArray(res.data) ? res.data : []);
+        } catch {
             // Not fatal — shop can still work without chips
             pushToast("Warning", "Failed to load categories.");
         }
@@ -95,7 +96,7 @@ export default function Shop() {
         }
     };
 
-    // Initial load
+    // Initial categories load
     useEffect(() => {
         loadCategories();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,17 +131,25 @@ export default function Shop() {
         return c?.name || "Category";
     }, [activeCategory, categories]);
 
+    const resultHint = useMemo(() => {
+        const q = debouncedSearch.trim();
+        if (q) return `Showing results for “${q}” (${products.length})`;
+        if (activeCategory) return `Showing “${categoryName}” (${products.length})`;
+        return `Showing all products (${products.length})`;
+    }, [debouncedSearch, activeCategory, categoryName, products.length]);
+
     return (
         <>
             {/* Sticky nav */}
             <div className="nav">
                 <div className="container navRow">
-                    <div className="brand" onClick={() => nav("/shop")} style={{ cursor: "pointer" }}>
+                    <div className="brand" onClick={() => nav("/home")} style={{ cursor: "pointer" }}>
                         <div className="brandBadge" />
                         Modern Commerce
                     </div>
 
                     <div className="navActions">
+                        <button className="btn" onClick={() => nav("/home")}>Home</button>
                         <button className="btn" onClick={() => nav("/cart")}>Cart</button>
                         <button className="btn btnPrimary" onClick={() => nav("/login")}>
                             {hasToken ? "Account" : "Login"}
@@ -174,7 +183,7 @@ export default function Shop() {
 
                         {/* Search box */}
                         <div
-                            className="surface"
+                            className="surface searchBox"
                             style={{
                                 display: "flex",
                                 alignItems: "center",
@@ -186,20 +195,18 @@ export default function Shop() {
                             }}
                         >
                             <span style={{ opacity: 0.7, fontWeight: 800 }}>🔎</span>
+
                             <input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search products (e.g. guitar, hoodie, vacuum)…"
+                                className="searchInput"
                                 style={{
-                                    border: "none",
-                                    outline: "none",
-                                    boxShadow: "none",
-                                    background: "transparent",
-                                    padding: 0,
                                     width: "100%",
                                     color: "inherit",
                                 }}
                             />
+
                             {search.trim().length > 0 && (
                                 <button
                                     className="btn"
@@ -258,13 +265,7 @@ export default function Shop() {
                 ) : (
                     <>
                         {/* Result hint */}
-                        <div className="subtle" style={{ marginTop: 12 }}>
-                            {debouncedSearch.trim() ? (
-                                <>Showing results for “{debouncedSearch.trim()}” ({products.length})</>
-                            ) : (
-                                <>Showing {activeCategory ? `“${categoryName}”` : "all products"} ({products.length})</>
-                            )}
-                        </div>
+                        <div className="subtle" style={{ marginTop: 12 }}>{resultHint}</div>
 
                         <div
                             style={{
@@ -275,7 +276,8 @@ export default function Shop() {
                             }}
                         >
                             {products.map((p) => {
-                                const primary = p.primary_image?.url || "https://picsum.photos/seed/fallback-primary/800/800";
+                                const primary =
+                                    p.primary_image?.url || "https://picsum.photos/seed/fallback-primary/800/800";
                                 const secondary = getSecondaryImage(p) || primary;
 
                                 const sale = p.compare_at_price && p.compare_at_price > p.price;
@@ -286,6 +288,15 @@ export default function Shop() {
                                     <div
                                         key={p.id}
                                         className="productCard surface"
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => nav(`/products/${p.slug}`)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                                e.preventDefault();
+                                                nav(`/products/${p.slug}`);
+                                            }
+                                        }}
                                         style={{
                                             borderRadius: 18,
                                             overflow: "hidden",
@@ -293,6 +304,7 @@ export default function Shop() {
                                             boxShadow: "0 10px 30px rgba(0,0,0,.25)",
                                             transform: "translateY(0)",
                                             transition: "transform .18s ease, box-shadow .18s ease, border-color .18s ease",
+                                            cursor: "pointer",
                                         }}
                                         onMouseEnter={(e) => {
                                             e.currentTarget.style.transform = "translateY(-4px)";
@@ -304,9 +316,6 @@ export default function Shop() {
                                             e.currentTarget.style.boxShadow = "0 10px 30px rgba(0,0,0,.25)";
                                             e.currentTarget.style.borderColor = "rgba(255,255,255,.10)";
                                         }}
-                                        onClick={() => nav(`/products/${p.slug}`)}
-                                        role="button"
-                                        tabIndex={0}
                                     >
                                         {/* Media */}
                                         <div style={{ position: "relative", height: 180, overflow: "hidden" }}>
@@ -323,7 +332,8 @@ export default function Shop() {
                                                         fontSize: 12,
                                                         letterSpacing: ".3px",
                                                         color: "#fff",
-                                                        background: "linear-gradient(135deg, rgba(255,77,110,.95), rgba(255,153,102,.9))",
+                                                        background:
+                                                            "linear-gradient(135deg, rgba(255,77,110,.95), rgba(255,153,102,.9))",
                                                         boxShadow: "0 10px 25px rgba(255,77,110,.25)",
                                                         border: "1px solid rgba(255,255,255,.18)",
                                                     }}
@@ -352,7 +362,9 @@ export default function Shop() {
                                                     src={secondary}
                                                     alt={p.name}
                                                     loading="lazy"
-                                                    onError={(e) => (e.currentTarget.src = "https://picsum.photos/seed/fallback-secondary/800/800")}
+                                                    onError={(e) =>
+                                                        (e.currentTarget.src = "https://picsum.photos/seed/fallback-secondary/800/800")
+                                                    }
                                                     style={{
                                                         width: "100%",
                                                         height: "100%",
@@ -388,8 +400,17 @@ export default function Shop() {
                                             </div>
 
                                             {desc && (
-                                                <div style={{ marginTop: 8, color: "rgba(255,255,255,.72)", fontSize: 13, lineHeight: 1.35, minHeight: 36 }}>
-                                                    {desc.slice(0, 78)}{desc.length > 78 ? "…" : ""}
+                                                <div
+                                                    style={{
+                                                        marginTop: 8,
+                                                        color: "rgba(255,255,255,.72)",
+                                                        fontSize: 13,
+                                                        lineHeight: 1.35,
+                                                        minHeight: 36,
+                                                    }}
+                                                >
+                                                    {desc.slice(0, 78)}
+                                                    {desc.length > 78 ? "…" : ""}
                                                 </div>
                                             )}
 
@@ -415,6 +436,7 @@ export default function Shop() {
                             })}
                         </div>
 
+                        {/* Empty state */}
                         {!products.length && (
                             <div className="surface" style={{ marginTop: 16, padding: 16 }}>
                                 No products found.
@@ -434,17 +456,17 @@ export default function Shop() {
 
             <Toast toasts={toasts} removeToast={removeToast} />
 
-            {/* Hover image swap behavior scoped to cards only + chips styling */}
             <style>{`
+        /* Image swap on hover (scoped) */
         .productCard:hover .shopImgPrimary { opacity: 0; transform: scale(1.06); }
         .productCard:hover .shopImgSecondary { opacity: 1; transform: scale(1.06); }
 
+        /* Chips */
         .chipRow {
           display: flex;
           gap: 10px;
           flex-wrap: wrap;
         }
-
         .chip {
           appearance: none;
           border: 1px solid rgba(255,255,255,.12);
@@ -458,22 +480,52 @@ export default function Shop() {
           transition: transform .12s ease, border-color .12s ease, background .12s ease;
           user-select: none;
         }
-
         .chip:hover {
           transform: translateY(-1px);
           border-color: rgba(79,140,255,.35);
           background: rgba(79,140,255,.10);
         }
-
         .chipActive {
           border-color: rgba(79,140,255,.55);
           background: rgba(79,140,255,.16);
           box-shadow: 0 10px 25px rgba(0,0,0,.18);
         }
+
+        /* Clean search input (NO inner border on focus) */
+        .searchInput {
+          border: none !important;
+          outline: none !important;
+          box-shadow: none !important;
+          background: transparent !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          font: inherit;
+          color: inherit;
+          min-width: 0;
+        }
+        .searchInput:focus,
+        .searchInput:focus-visible {
+          outline: none !important;
+          box-shadow: none !important;
+        }
+        /* Safari/Chrome inner styles */
+        input.searchInput,
+        input.searchInput::-webkit-search-decoration,
+        input.searchInput::-webkit-search-cancel-button,
+        input.searchInput::-webkit-search-results-button,
+        input.searchInput::-webkit-search-results-decoration {
+          -webkit-appearance: none;
+        }
+        /* (Optional) subtle focus glow on the container instead */
+        .searchBox:focus-within {
+          border-color: rgba(79,140,255,.35) !important;
+          box-shadow: 0 0 0 4px rgba(79,140,255,.08);
+        }
       `}</style>
         </>
     );
 }
+
 
 
 

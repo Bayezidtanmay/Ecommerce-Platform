@@ -6,6 +6,8 @@ import Checkout from "./pages/Checkout";
 import Orders from "./pages/Orders";
 import OrderDetails from "./pages/OrderDetails";
 import ProductDetails from "./pages/ProductDetails";
+import Home from "./pages/Home";
+
 
 
 export default function App() {
@@ -19,6 +21,7 @@ export default function App() {
       <Route path="/orders" element={<Orders />} />
       <Route path="/orders/:id" element={<OrderDetails />} />
       <Route path="/products/:slug" element={<ProductDetails />} />
+      <Route path="/home" element={<Home />} />
     </Routes>
   );
 }
