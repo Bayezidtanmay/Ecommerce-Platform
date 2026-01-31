@@ -1,32 +1,41 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
+
+import Home from "./pages/Home";
 import Shop from "./pages/Shop";
-import Login from "./pages/Login";
+import ProductDetails from "./pages/ProductDetails";
 import Cart from "./pages/Cart";
-import Checkout from "./pages/Checkout";
+import Login from "./pages/Login";
+import Wishlist from "./pages/Wishlist";
 import Orders from "./pages/Orders";
 import OrderDetails from "./pages/OrderDetails";
-import ProductDetails from "./pages/ProductDetails";
-import Home from "./pages/Home";
-import Wishlist from "./pages/Wishlist";
-
-
-
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/shop" replace />} />
+      {/* Default */}
+      <Route path="/" element={<Navigate to="/home" replace />} />
+
+      {/* Main */}
+      <Route path="/home" element={<Home />} />
       <Route path="/shop" element={<Shop />} />
-      <Route path="/login" element={<Login />} />
+      <Route path="/products/:slug" element={<ProductDetails />} />
+
+      {/* Cart + auth */}
       <Route path="/cart" element={<Cart />} />
-      <Route path="/checkout" element={<Checkout />} />
+      <Route path="/login" element={<Login />} />
+
+      {/* Wishlist */}
+      <Route path="/wishlist" element={<Wishlist />} />
+
+      {/* Orders */}
       <Route path="/orders" element={<Orders />} />
       <Route path="/orders/:id" element={<OrderDetails />} />
-      <Route path="/products/:slug" element={<ProductDetails />} />
-      <Route path="/home" element={<Home />} />
-      <Route path="/wishlist" element={<Wishlist />} />
+
+      {/* Fallback */}
+      <Route path="*" element={<div className="container page"><div className="surface" style={{ padding: 16 }}>Not found</div></div>} />
     </Routes>
   );
 }
+
 
 

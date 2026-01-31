@@ -1,11 +1,29 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
+import Toast from "../components/Toast";
 
-const STEPS = ["pending", "paid", "shipped", "completed"];
-const ALL_STATUSES = ["pending", "paid", "shipped", "completed", "cancelled"];
+const money = (cents) => `€${(cents / 100).toFixed(2)}`;
 
-const label = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+function buildTimeline(order) {
+    const status = (order?.status || "placed").toLowerCase();
+
+    const steps = [
+        { key: "placed", label: "Order placed" },
+        { key: "processing", label: "Processing" },
+        { key: "shipped", label: "Shipped" },
+        { key: "delivered", label: "Delivered" },
+    ];
+
+    // basic status -> progress mapping
+    const idx =
+        status === "delivered" ? 3 :
+            status === "shipped" ? 2 :
+                status === "processing" ? 1 :
+                    0;
+
+    return steps.map((s, i) => ({ ...s, done: i <= idx, active: i === idx }));
+}
 
 export default function OrderDetails() {
     const { id } = useParams();
@@ -14,71 +32,44 @@ export default function OrderDetails() {
     const [loading, setLoading] = useState(true);
     const [order, setOrder] = useState(null);
 
-    const [me, setMe] = useState(null);
-    const isAdmin = me?.role === "admin";
-
-    const [statusDraft, setStatusDraft] = useState("pending");
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState("");
-
-    const load = async () => {
-        setLoading(true);
-        setError("");
-        try {
-            const [meRes, orderRes] = await Promise.all([
-                api.get("/me"),
-                api.get(`/orders/${id}`),
-            ]);
-            setMe(meRes.data);
-            setOrder(orderRes.data);
-            setStatusDraft(orderRes.data.status);
-        } catch (err) {
-            if (err?.response?.status === 401) return nav("/login");
-            setError(err?.response?.data?.message || "Failed to load order");
-        } finally {
-            setLoading(false);
-        }
+    const [toasts, setToasts] = useState([]);
+    const pushToast = (title, text) => {
+        const tid = Date.now() + Math.random();
+        setToasts((p) => [...p, { id: tid, title, text }]);
     };
+    const removeToast = (tid) => setToasts((p) => p.filter((t) => t.id !== tid));
 
     useEffect(() => {
-        load();
+        let mounted = true;
+
+        (async () => {
+            setLoading(true);
+            try {
+                const res = await api.get(`/orders/${id}`);
+                if (!mounted) return;
+                setOrder(res.data);
+            } catch (err) {
+                if (err?.response?.status === 401) {
+                    nav("/login");
+                    return;
+                }
+                pushToast("Error", err?.response?.data?.message || "Order not found");
+                setOrder(null);
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        })();
+
+        return () => { mounted = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
-    const progressIndex = useMemo(() => {
-        if (!order) return -1;
-        if (order.status === "cancelled") return -1;
-        return STEPS.indexOf(order.status);
-    }, [order]);
-
-    const updateStatus = async () => {
-        if (!order) return;
-        setSaving(true);
-        setError("");
-        try {
-            const res = await api.patch(`/orders/${order.id}/status`, {
-                status: statusDraft,
-            });
-            // res might return {order} or just message. We'll reload to be safe.
-            await load();
-        } catch (err) {
-            if (err?.response?.status === 401) return nav("/login");
-            if (err?.response?.status === 403) {
-                setError("Forbidden: Admin access required.");
-                return;
-            }
-            setError(err?.response?.data?.message || "Failed to update status");
-        } finally {
-            setSaving(false);
-        }
-    };
+    const timeline = buildTimeline(order);
 
     if (loading) {
         return (
             <div className="container page">
-                <div className="surface" style={{ padding: 16 }}>
-                    Loading...
-                </div>
+                <div className="surface" style={{ padding: 16 }}>Loading order...</div>
             </div>
         );
     }
@@ -87,201 +78,118 @@ export default function OrderDetails() {
         return (
             <div className="container page">
                 <div className="surface" style={{ padding: 16 }}>
-                    Not found
+                    Order not found.
+                    <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <button className="btn" onClick={() => nav("/orders")}>Back to orders</button>
+                        <button className="btn btnPrimary" onClick={() => nav("/shop")}>Shop</button>
+                    </div>
                 </div>
+                <Toast toasts={toasts} removeToast={removeToast} />
             </div>
         );
     }
 
     return (
-        <div className="container page">
-            <div className="surface" style={{ padding: 18 }}>
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: 10,
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                    }}
-                >
-                    <div>
-                        <h1 className="h1" style={{ margin: 0 }}>
-                            Order #{order.id}
-                        </h1>
-                        <div className="subtle" style={{ marginTop: 6 }}>
-                            Total: €{(order.total / 100).toFixed(2)}
-                        </div>
-                    </div>
-
-                    <div className="pill" style={{ textTransform: "capitalize" }}>
-                        {order.status}
-                    </div>
-                </div>
-
-                {/* Error banner */}
-                {error && (
-                    <div
-                        style={{
-                            marginTop: 12,
-                            padding: 12,
-                            borderRadius: 14,
-                            border: "1px solid rgba(255,92,122,.35)",
-                            background: "rgba(255,92,122,.12)",
-                        }}
-                    >
-                        {error}
-                    </div>
-                )}
-
-                {/* Status progress */}
-                <div style={{ marginTop: 16 }}>
-                    <div className="subtle" style={{ marginBottom: 10 }}>
-                        Order progress
-                    </div>
-
-                    {order.status === "cancelled" ? (
-                        <div className="surface" style={{ padding: 14, borderRadius: 16 }}>
-                            <div style={{ fontWeight: 900 }}>Cancelled</div>
+        <>
+            <div className="container page">
+                <div className="surface" style={{ padding: 18 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                        <div>
+                            <div className="subtle" style={{ cursor: "pointer" }} onClick={() => nav("/orders")}>
+                                ← Back to orders
+                            </div>
+                            <h1 className="h1" style={{ marginTop: 8, marginBottom: 6 }}>Order #{order.id}</h1>
                             <div className="subtle">
-                                This order has been cancelled.
+                                Status: <span style={{ fontWeight: 900, opacity: 0.95 }}>{(order.status || "placed").toUpperCase()}</span>
                             </div>
                         </div>
-                    ) : (
-                        <div
-                            style={{
-                                display: "grid",
-                                gridTemplateColumns: `repeat(${STEPS.length}, 1fr)`,
-                                gap: 10,
-                            }}
-                        >
-                            {STEPS.map((s, idx) => {
-                                const active = idx <= progressIndex;
-                                return (
-                                    <div
-                                        key={s}
-                                        className="surface"
-                                        style={{
-                                            padding: 12,
-                                            borderRadius: 16,
-                                            textAlign: "center",
-                                            opacity: active ? 1 : 0.55,
-                                            border: active
-                                                ? "1px solid rgba(79,140,255,.35)"
-                                                : undefined,
-                                            transform: active ? "translateY(-1px)" : "none",
-                                            transition: "transform .2s ease, opacity .2s ease",
-                                        }}
-                                    >
-                                        <div style={{ fontWeight: 900 }}>{label(s)}</div>
-                                        <div className="subtle">{active ? "Done" : "Pending"}</div>
+
+                        <div className="pill" style={{ textTransform: "none" }}>
+                            Total: {money(order.total_cents ?? order.total ?? 0)}
+                        </div>
+                    </div>
+
+                    {/* Timeline */}
+                    <div className="surface" style={{ marginTop: 16, padding: 16, borderRadius: 18 }}>
+                        <div style={{ fontWeight: 900, fontSize: 18 }}>Order timeline</div>
+                        <div className="subtle" style={{ marginTop: 4 }}>Track your order progress.</div>
+
+                        <div className="timeline" style={{ marginTop: 14 }}>
+                            {timeline.map((s) => (
+                                <div key={s.key} className={`tStep ${s.done ? "tDone" : ""} ${s.active ? "tActive" : ""}`}>
+                                    <div className="tDot" />
+                                    <div>
+                                        <div style={{ fontWeight: 900 }}>{s.label}</div>
+                                        <div className="subtle" style={{ marginTop: 2 }}>
+                                            {s.done ? "Completed" : s.active ? "In progress" : "Pending"}
+                                        </div>
                                     </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                {/* Admin controls */}
-                {isAdmin && (
-                    <div style={{ marginTop: 16 }}>
-                        <div className="subtle" style={{ marginBottom: 10 }}>
-                            Admin controls
-                        </div>
-
-                        <div
-                            className="surface"
-                            style={{
-                                padding: 14,
-                                borderRadius: 16,
-                                display: "flex",
-                                gap: 10,
-                                alignItems: "center",
-                                flexWrap: "wrap",
-                            }}
-                        >
-                            <select
-                                value={statusDraft}
-                                onChange={(e) => setStatusDraft(e.target.value)}
-                                className="input"
-                                style={{ width: 220, cursor: "pointer" }}
-                            >
-                                {ALL_STATUSES.map((s) => (
-                                    <option key={s} value={s}>
-                                        {label(s)}
-                                    </option>
-                                ))}
-                            </select>
-
-                            <button
-                                className="btn btnPrimary"
-                                onClick={updateStatus}
-                                disabled={saving || statusDraft === order.status}
-                                style={{ padding: "12px 16px", fontWeight: 900 }}
-                            >
-                                {saving ? "Updating..." : "Update status"}
-                            </button>
-
-                            <div className="subtle">
-                                Current: <span style={{ fontWeight: 900, textTransform: "capitalize" }}>{order.status}</span>
-                            </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
-                )}
 
-                {/* Items */}
-                <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
-                    {order.items.map((it) => (
-                        <div
-                            key={it.id}
-                            className="surface"
-                            style={{
-                                padding: 14,
-                                borderRadius: 16,
-                                display: "flex",
-                                gap: 12,
-                                alignItems: "center",
-                            }}
-                        >
-                            <img
-                                src={
-                                    it.product?.primary_image?.url ||
-                                    "https://picsum.photos/seed/fallback/200/200"
-                                }
-                                alt={it.product?.name}
-                                style={{
-                                    width: 84,
-                                    height: 84,
-                                    borderRadius: 14,
-                                    objectFit: "cover",
-                                }}
-                            />
+                    {/* Items */}
+                    <div className="surface" style={{ marginTop: 16, padding: 16, borderRadius: 18 }}>
+                        <div style={{ fontWeight: 900, fontSize: 18 }}>Items</div>
 
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 900 }}>{it.product?.name}</div>
-                                <div className="subtle">
-                                    Qty: {it.qty} • €{(it.unit_price / 100).toFixed(2)} each
+                        <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                            {(order.items || []).map((it) => (
+                                <div key={it.id} className="surface" style={{ padding: 14, borderRadius: 16 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                                        <div style={{ fontWeight: 900 }}>{it.product?.name || "Product"}</div>
+                                        <div style={{ fontWeight: 900 }}>{money(it.price_cents ?? it.price ?? 0)}</div>
+                                    </div>
+                                    <div className="subtle" style={{ marginTop: 4 }}>
+                                        Qty: {it.qty}
+                                    </div>
                                 </div>
-                            </div>
-
-                            <div style={{ fontWeight: 900 }}>
-                                €{((it.qty * it.unit_price) / 100).toFixed(2)}
-                            </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
 
-                {/* Footer buttons */}
-                <div style={{ marginTop: 18, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <button className="btn" onClick={() => nav("/orders")}>
-                        Back to orders
-                    </button>
-                    <button className="btn btnPrimary" onClick={() => nav("/shop")}>
-                        Continue shopping
-                    </button>
+                        {!order.items?.length ? (
+                            <div className="subtle" style={{ marginTop: 10 }}>No items found for this order.</div>
+                        ) : null}
+                    </div>
                 </div>
             </div>
-        </div>
+
+            <Toast toasts={toasts} removeToast={removeToast} />
+
+            <style>{`
+        .timeline{
+          display:grid;
+          gap:12px;
+        }
+        .tStep{
+          display:flex;
+          gap:12px;
+          align-items:flex-start;
+          padding:12px;
+          border-radius:16px;
+          border:1px solid rgba(255,255,255,.10);
+          background: rgba(255,255,255,.04);
+        }
+        .tDot{
+          width:14px;
+          height:14px;
+          border-radius:999px;
+          margin-top:4px;
+          border: 2px solid rgba(255,255,255,.30);
+          background: transparent;
+          flex: 0 0 auto;
+        }
+        .tDone .tDot{
+          border-color: rgba(79,140,255,.65);
+          background: rgba(79,140,255,.40);
+        }
+        .tActive{
+          border-color: rgba(79,140,255,.35);
+          box-shadow: 0 0 0 4px rgba(79,140,255,.06);
+        }
+      `}</style>
+        </>
     );
 }
+
 

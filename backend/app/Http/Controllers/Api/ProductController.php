@@ -12,12 +12,9 @@ class ProductController extends Controller
     {
         $q = Product::query()
             ->where('is_active', true)
-            ->with([
-                'category:id,name,slug',
-                'primaryImage:id,product_id,url,is_primary',
-                // IMPORTANT: include images so frontend can hover-swap
-                'images:id,product_id,url,is_primary',
-            ]);
+            ->with(['category:id,name,slug', 'primaryImage:id,product_id,url,is_primary'])
+            ->withCount('reviews')
+            ->withAvg('reviews', 'rating');
 
         // search by name
         if ($search = $request->query('search')) {
@@ -30,10 +27,10 @@ class ProductController extends Controller
         }
 
         // price filters (in cents)
-        if (($min = $request->query('minPrice')) !== null && $min !== '') {
+        if ($min = $request->query('minPrice')) {
             $q->where('price', '>=', (int) $min);
         }
-        if (($max = $request->query('maxPrice')) !== null && $max !== '') {
+        if ($max = $request->query('maxPrice')) {
             $q->where('price', '<=', (int) $max);
         }
 
@@ -41,40 +38,33 @@ class ProductController extends Controller
         $sort = $request->query('sort', 'newest');
         if ($sort === 'price_asc') $q->orderBy('price', 'asc');
         elseif ($sort === 'price_desc') $q->orderBy('price', 'desc');
-        // Optional: sort by best discount (needs compare_at_price)
-        elseif ($sort === 'discount') {
-            $q->whereNotNull('compare_at_price')
-                ->whereColumn('compare_at_price', '>', 'price')
-                ->orderByRaw('(compare_at_price - price) DESC');
-        } else $q->latest();
+        else $q->latest();
 
-        // Ensure images have primary first (works for both shop + details)
-        $products = $q->paginate(12);
-        $products->getCollection()->transform(function ($p) {
-            if ($p->relationLoaded('images') && $p->images) {
-                $p->setRelation('images', $p->images->sortByDesc('is_primary')->values());
-            }
-            return $p;
-        });
-
-        return $products;
+        return $q->paginate(12);
     }
 
     public function show(string $slug)
     {
-        $product = Product::query()
-            ->where('slug', $slug)
+        $product = Product::where('slug', $slug)
             ->where('is_active', true)
             ->with([
                 'category:id,name,slug',
-                'primaryImage:id,product_id,url,is_primary',
                 'images:id,product_id,url,is_primary',
+                'primaryImage:id,product_id,url,is_primary',
             ])
+            ->withCount('reviews')
+            ->withAvg('reviews', 'rating')
             ->firstOrFail();
 
-        // Order images: primary first
-        if ($product->relationLoaded('images') && $product->images) {
-            $product->setRelation('images', $product->images->sortByDesc('is_primary')->values());
+        // Optional: if user is logged in (token in request), include their own review
+        $user = request()->user();
+        if ($user) {
+            $my = $product->reviews()
+                ->where('user_id', $user->id)
+                ->first(['id', 'rating', 'title', 'body', 'created_at', 'updated_at']);
+            $product->setAttribute('my_review', $my);
+        } else {
+            $product->setAttribute('my_review', null);
         }
 
         return response()->json($product);

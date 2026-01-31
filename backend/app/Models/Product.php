@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'category_id',
         'name',
@@ -19,16 +20,12 @@ class Product extends Model
         'is_active',
     ];
 
-    protected $casts = [
-        'is_active' => 'boolean',
-    ];
-
-    public function category(): BelongsTo
+    public function category()
     {
         return $this->belongsTo(Category::class);
     }
 
-    public function images(): HasMany
+    public function images()
     {
         return $this->hasMany(ProductImage::class);
     }
@@ -36,5 +33,10 @@ class Product extends Model
     public function primaryImage()
     {
         return $this->hasOne(ProductImage::class)->where('is_primary', true);
+    }
+
+    public function reviews()
+    {
+        return $this->hasMany(ProductReview::class);
     }
 }
