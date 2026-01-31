@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\WishlistController;
 
 
 /*
@@ -50,4 +51,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Admin: update order status
     Route::patch('/orders/{id}/status', [OrderController::class, 'updateStatus'])->middleware('admin');
     Route::get('/categories', [CategoryController::class, 'index']);
+
+    // Wishlist
+    Route::get('/wishlist', [WishlistController::class, 'index']);
+    Route::post('/wishlist/toggle', [WishlistController::class, 'toggle']);
+    Route::delete('/wishlist/items/{productId}', [WishlistController::class, 'destroy']);
 });

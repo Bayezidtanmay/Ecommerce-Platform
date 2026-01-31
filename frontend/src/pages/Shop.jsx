@@ -42,6 +42,9 @@ export default function Shop() {
     const [search, setSearch] = useState("");
     const debouncedSearch = useDebouncedValue(search, 450);
 
+    // Wishlist
+    const [wishIds, setWishIds] = useState(new Set());
+
     // Toast
     const [toasts, setToasts] = useState([]);
     const pushToast = (title, text) => {
@@ -93,6 +96,47 @@ export default function Shop() {
             pushToast("Error", err?.response?.data?.message || "Failed to load products");
         } finally {
             setLoading(false);
+        }
+    };
+
+    // ✅ Wishlist IDs loader (as you requested)
+    const loadWishlistIds = async () => {
+        if (!hasToken) return;
+        try {
+            const res = await api.get("/wishlist");
+
+            // Your requested format:
+            // res.data?.product_ids
+            // But also support common variants to avoid breaking:
+            // res.data?.ids OR res.data is an array of products
+            const ids =
+                res.data?.product_ids ||
+                res.data?.ids ||
+                (Array.isArray(res.data) ? res.data.map((p) => p.id) : []);
+
+            setWishIds(new Set(ids));
+        } catch { }
+    };
+
+    useEffect(() => {
+        loadWishlistIds();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // ✅ Toggle wishlist (as you requested)
+    const toggleWish = async (productId) => {
+        try {
+            const res = await api.post("/wishlist/toggle", { product_id: productId });
+
+            setWishIds((prev) => {
+                const next = new Set(prev);
+                if (res.data?.in_wishlist) next.add(productId);
+                else next.delete(productId);
+                return next;
+            });
+        } catch (err) {
+            if (err?.response?.status === 401) return nav("/login");
+            pushToast("Error", "Could not update wishlist");
         }
     };
 
@@ -276,8 +320,7 @@ export default function Shop() {
                             }}
                         >
                             {products.map((p) => {
-                                const primary =
-                                    p.primary_image?.url || "https://picsum.photos/seed/fallback-primary/800/800";
+                                const primary = p.primary_image?.url || "https://picsum.photos/seed/fallback-primary/800/800";
                                 const secondary = getSecondaryImage(p) || primary;
 
                                 const sale = p.compare_at_price && p.compare_at_price > p.price;
@@ -319,6 +362,23 @@ export default function Shop() {
                                     >
                                         {/* Media */}
                                         <div style={{ position: "relative", height: 180, overflow: "hidden" }}>
+                                            {/* ✅ Wishlist button (your exact snippet) */}
+                                            <button
+                                                type="button"
+                                                className="wishBtn"
+                                                onClick={(e) => { e.stopPropagation(); toggleWish(p.id); }}
+                                                aria-label="Toggle wishlist"
+                                                title="Wishlist"
+                                                style={{
+                                                    position: "absolute",
+                                                    top: 10,
+                                                    right: 10,
+                                                    zIndex: 3,
+                                                }}
+                                            >
+                                                {wishIds.has(p.id) ? "♥" : "♡"}
+                                            </button>
+
                                             {sale && (
                                                 <div
                                                     style={{
@@ -332,8 +392,7 @@ export default function Shop() {
                                                         fontSize: 12,
                                                         letterSpacing: ".3px",
                                                         color: "#fff",
-                                                        background:
-                                                            "linear-gradient(135deg, rgba(255,77,110,.95), rgba(255,153,102,.9))",
+                                                        background: "linear-gradient(135deg, rgba(255,77,110,.95), rgba(255,153,102,.9))",
                                                         boxShadow: "0 10px 25px rgba(255,77,110,.25)",
                                                         border: "1px solid rgba(255,255,255,.18)",
                                                     }}
@@ -362,9 +421,7 @@ export default function Shop() {
                                                     src={secondary}
                                                     alt={p.name}
                                                     loading="lazy"
-                                                    onError={(e) =>
-                                                        (e.currentTarget.src = "https://picsum.photos/seed/fallback-secondary/800/800")
-                                                    }
+                                                    onError={(e) => (e.currentTarget.src = "https://picsum.photos/seed/fallback-secondary/800/800")}
                                                     style={{
                                                         width: "100%",
                                                         height: "100%",
@@ -508,7 +565,6 @@ export default function Shop() {
           outline: none !important;
           box-shadow: none !important;
         }
-        /* Safari/Chrome inner styles */
         input.searchInput,
         input.searchInput::-webkit-search-decoration,
         input.searchInput::-webkit-search-cancel-button,
@@ -516,15 +572,37 @@ export default function Shop() {
         input.searchInput::-webkit-search-results-decoration {
           -webkit-appearance: none;
         }
-        /* (Optional) subtle focus glow on the container instead */
         .searchBox:focus-within {
           border-color: rgba(79,140,255,.35) !important;
           box-shadow: 0 0 0 4px rgba(79,140,255,.08);
+        }
+
+        /* Wishlist button */
+        .wishBtn {
+          width: 38px;
+          height: 38px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,.18);
+          background: rgba(0,0,0,.35);
+          color: rgba(255,255,255,.95);
+          font-weight: 900;
+          font-size: 16px;
+          cursor: pointer;
+          backdrop-filter: blur(10px);
+          transition: transform .12s ease, border-color .12s ease, background .12s ease;
+          display: grid;
+          place-items: center;
+        }
+        .wishBtn:hover {
+          transform: translateY(-1px) scale(1.03);
+          border-color: rgba(255,92,122,.45);
+          background: rgba(255,92,122,.18);
         }
       `}</style>
         </>
     );
 }
+
 
 
 

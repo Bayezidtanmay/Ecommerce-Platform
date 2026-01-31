@@ -56,6 +56,7 @@ export default function TopNav() {
                     <button className="btn btnPrimary" onClick={go(hasToken ? "/home" : "/login")}>
                         {hasToken ? (userName ? userName : "Account") : "Login"}
                     </button>
+                    <button className="btn" onClick={() => nav("/wishlist")}>Wishlist</button>
                 </div>
             </div>
         </div>

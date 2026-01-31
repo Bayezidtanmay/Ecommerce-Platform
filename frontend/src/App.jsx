@@ -7,6 +7,8 @@ import Orders from "./pages/Orders";
 import OrderDetails from "./pages/OrderDetails";
 import ProductDetails from "./pages/ProductDetails";
 import Home from "./pages/Home";
+import Wishlist from "./pages/Wishlist";
+
 
 
 
@@ -22,6 +24,7 @@ export default function App() {
       <Route path="/orders/:id" element={<OrderDetails />} />
       <Route path="/products/:slug" element={<ProductDetails />} />
       <Route path="/home" element={<Home />} />
+      <Route path="/wishlist" element={<Wishlist />} />
     </Routes>
   );
 }
